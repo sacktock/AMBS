@@ -8,7 +8,7 @@ By leveraging world models for look-ahead shielding we obatin a general purpose 
 
 # Agents
 
-In our experiments details in "Approximate Model-Based Shielding for Safe Reinforcement Learning" all agents are implemented with [JAX](https://github.com/google/jax#pip-installation-gpu-cuda), although the dependencies mostly overlap they may differ slightly depending on whether you are running a DreamerV3 based agent or a dopamine based agent.
+In our experiments detailed in "Approximate Model-Based Shielding for Safe Reinforcement Learning" all agents are implemented with [JAX](https://github.com/google/jax#pip-installation-gpu-cuda), although the dependencies mostly overlap they may differ slightly depending on whether you are running a DreamerV3 based agent or a dopamine based agent.
 
 # Dependencies
 
@@ -28,7 +28,17 @@ pip install //DreamerV3 dependencies
 conda activate jax_dopamine
 pip install //dopamine dependencies
 ```
+Alternatively use our requirements files, although we stress that the specific [JAX](https://github.com/google/jax#pip-installation-gpu-cuda) installation required is hardware depedent.
 
+```
+conda activate jax
+pip install -r requirements_jax.txt
+```
+
+```
+conda activate jax_dopamine
+pip install -r requirements_jax_dopamine.txt
+```
 # Running Experiments
 For DreamerV3 based agents, navigate to the relevant subdirectory and run ```train.py```. The following command will run DreamerV3 with AMBS on Seaquest for 40M frames. The ```--env.atari.labels``` flag is used to specify the safety labels ```death```, ```early-surface```, ```out-of-oxygen```,  and the ```xlarge``` option determines the model size (```xlarge``` is the default for atari games).
 ```
