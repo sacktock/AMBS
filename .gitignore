@@ -1,0 +1,14 @@
+.ipynb_checkpoints/
+__pycache__/
+logdir/
+nohup/
+slurm/
+SLURM.txt
+libdevice.10.bc
+*.pyc
+legacy/
+data/
+images/
+plot.ipynb
+*/__pycache__/
+slurm*
