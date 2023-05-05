@@ -18,7 +18,7 @@ conda create -n jax --clone base
 conda create -n jax_dopamine --clone base
 ```
 
-We refer to the [DreamerV3 repository](https://github.com/danijar/dreamerv3) for the list of dependencies associated with the DreamerV3 based agents. And we refer to [dopamine](https://github.com/google/dopamine) for the list of dependencies associated with the dopamine based agents.
+We refer to the [DreamerV3](https://github.com/danijar/dreamerv3) repository for the list of dependencies associated with the DreamerV3 based agents. And we refer to [google/dopamine](https://github.com/google/dopamine) for the list of dependencies associated with the dopamine based agents.
 ```
 conda activate jax
 pip install //DreamerV3 dependencies
@@ -30,12 +30,12 @@ pip install //dopamine dependencies
 ```
 
 # Running Experiments
-For DreamerV3 based agents navigate to the relevant subdirectory and run ```train.py```. The following command will run DreamerV3 with AMBS on Seaquest with safety labels ```death```, ```early-surface```, ```out-of-oxygen``` for 40M frames with ```xlarge``` model size (default for atari games).
+For DreamerV3 based agents, navigate to the relevant subdirectory and run ```train.py```. The following command will run DreamerV3 with AMBS on Seaquest for 40M frames. The ```--env.atari.labels``` flag is used to specify the safety labels ```death```, ```early-surface```, ```out-of-oxygen```,  and the ```xlarge``` option determines the model size (```xlarge``` is the default for atari games).
 ```
 cd dreamerV3-shield
 python train.py --logdir ./logdir/seaquest/shield --configs atari xlarge --task atari_seaquest --env.atari.labels death early-surface out-of-oxygen --run.steps 10000000
 ```
-For dopamine based agents navugate to the dopamine subdirectory an run the desired agent.
+For dopamine based agents, navigate to the dopamine subdirectory an run the desired agent.
 ```
 cd dopamine
 python -um dopamine.discrete_domains.train --base_dir ./logdir/seaquest/rainbow --gin_files ./dopamine/jax/agents/full_rainbow/configs/full_rainbow_seaquest.gin
@@ -43,7 +43,7 @@ python -um dopamine.discrete_domains.train --base_dir ./logdir/seaquest/rainbow 
 
 # Plotting
 
-For plotting runs we use tensorboard. Navigate to the relevant subdirectory and start tensorboard
+For plotting runs we use tensorboard. Navigate to the relevant subdirectory and start tensorboard.
 ```
 cd dreamerV3-shield
 tensorboard --logdir ./logdir/seaquest
