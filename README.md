@@ -35,11 +35,14 @@ For DreamerV3 based agents, navigate to the relevant subdirectory and run ```tra
 cd dreamerV3-shield
 python train.py --logdir ./logdir/seaquest/shield --configs atari xlarge --task atari_seaquest --env.atari.labels death early-surface out-of-oxygen --run.steps 10000000
 ```
+*Random seed can be set with the ```--seed``` flag (default 0).*
+
 For dopamine based agents, navigate to the dopamine subdirectory an run the desired agent.
 ```
 cd dopamine
 python -um dopamine.discrete_domains.train --base_dir ./logdir/seaquest/rainbow --gin_files ./dopamine/jax/agents/full_rainbow/configs/full_rainbow_seaquest.gin
 ```
+*Random seed can be set by modifying the corresponding .gin file (e.g. JaxFullRainbowAgent.seed=0)*
 
 # Plotting
 
