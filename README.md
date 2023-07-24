@@ -1,3 +1,5 @@
+*Disclaimer* we are looking to integrate and extend the algorithm to work with SafetyGym, currently we do not claim our results hold in these sets of environments.
+
 # AMBS
 
 GitHub repository for "Approximate Model-Based Shielding for Safe Reinforcement Learning"
