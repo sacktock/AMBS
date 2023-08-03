@@ -1,4 +1,4 @@
-**Supplementary material** can be found here https://github.com/sacktock/AMBS/blob/main/supplementary-material.pdf. Also, feel free to visit the full paper paper here https://arxiv.org/
+**Supplementary material** can be found here https://github.com/sacktock/AMBS/blob/main/supplementary-material.pdf. Also, feel free to visit the full paper paper here https://arxiv.org/abs/2308.00707
 
 *Disclaimer* we are looking to integrate and extend the algorithm to work with SafetyGym, currently we do not claim our results hold in these sets of environments.
 
