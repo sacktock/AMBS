@@ -173,7 +173,6 @@ def main(argv=None):
     def per_episode(ep, cumul_metrics):
         suite, task = config.task.split('_', 1)
         kwargs = config.env.get(suite, {})
-        print(kwargs)
         length = (len(ep['reward']) - 1) * kwargs['repeat']
         score = float(ep['reward'].astype(np.float64).sum())
         cost = float(ep['cost'].astype(np.float64).sum())
