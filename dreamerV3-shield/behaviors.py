@@ -14,10 +14,11 @@ class Greedy(nj.Module):
   def __init__(self, wm, act_space, config):
     self.config = config
     critics = {}
+    scales = {'extr': 1.0}
     if config.shielding and config.shield_bootstrap:
-      scales = {'extr': 1.0, 'cost': 0.0}
-    else:
-      scales = {'extr': 1.0}
+      scales.update({'cost': 0.0})
+    if config.penalty_coeff:
+      scales.update({'penl': config.penalty_coeff})
     for key, scale in scales.items():
       if key == 'extr':
         rewfn = lambda s: wm.heads['reward'](s).mean()[1:]
@@ -25,14 +26,34 @@ class Greedy(nj.Module):
           critics[key] = agent.VFunction(rewfn, config, name=key)
         else:
           raise NotImplementedError(config.critic_type)
+      if key == 'penl':
+        penlfn = lambda s: jnp.clip(wm.heads['cost'](s).mean()[1:], 0.0, self.config.env.safetygym.cost_val) * (-1.0)
+        if config.use_safety_critic_params:
+          args = embodied.Config(
+          critic=self.config.safety_critic, critic_opt=self.config.safety_critic_opt,
+          slow_critic_fraction=self.config.slow_safety_critic_fraction,
+          slow_critic_update=self.config.slow_safety_critic_update,
+          critic_slowreg=self.config.safety_critic_slowreg,
+          critic_cont_fn=self.config.safety_critic_cont_fn,
+          horizon=self.config.safety_horizon
+          )
+        else:
+          args = None
+        if config.penl_critic_type == 'td3vfunction':
+          critics[key] = agent.VFunction(penlfn, config, args, name=key)
+        elif config.penl_critic_type == 'vfunction':
+          critics[key] = agent.VFunction(penlfn, config, args, name=key)
+        else:
+          raise NotImplementedError(config.critic_type)
       if key == 'cost':
-        costfn = lambda s: wm.heads['cost'](s).mean()[1:]
+        costfn = lambda s: jnp.clip(wm.heads['cost'](s).mean()[1:], 0.0, self.config.env.safetygym.cost_val)
         args = embodied.Config(
           critic=self.config.safety_critic, critic_opt=self.config.safety_critic_opt,
           slow_critic_fraction=self.config.slow_safety_critic_fraction,
           slow_critic_update=self.config.slow_safety_critic_update,
           critic_slowreg=self.config.safety_critic_slowreg,
-          critic_cont_fn=self.config.safety_critic_cont_fn
+          critic_cont_fn=self.config.safety_critic_cont_fn,
+          horizon=self.config.safety_horizon
           )
         if config.safety_critic_type == 'td3vfunction':
           critics[key] = agent.TD3VFunction(costfn, config, args, name=key)
@@ -59,13 +80,25 @@ class Greedy(nj.Module):
 class Safe(nj.Module):
 
   def __init__(self, wm, act_space, config):
-    rewfn = lambda s: wm.heads['cost'](s).mean()[1:] * (-1.0)
+    self.config = config
+    rewfn = lambda s: jnp.clip(wm.heads['cost'](s).mean()[1:], 0.0, self.config.env.safetygym.cost_val) * (-1.0)
+    args = embodied.Config(
+      critic=self.config.critic, critic_opt=self.config.safe_critic_opt,
+      slow_critic_fraction=self.config.slow_critic_fraction,
+      slow_critic_update=self.config.slow_critic_update,
+      critic_slowreg=self.config.critic_slowreg,
+      critic_cont_fn=self.config.critic_cont_fn,
+      horizon=self.config.horizon
+      )
     if config.critic_type == 'vfunction':
-      critics = {'cost': agent.VFunction(rewfn, config, name='critic')}
+      critics = {'cost': agent.VFunction(rewfn, config, args, name='critic')}
     else:
       raise NotImplementedError(config.critic_type)
+    args = embodied.Config(
+      actor_opt=self.config.safe_actor_opt
+    )
     self.ac = agent.ImagActorCritic(
-        critics, {'cost': 1.0}, act_space, config, name='ac')
+        critics, {'cost': 1.0}, act_space, config, args, name='ac')
 
   def initial(self, batch_size):
     return self.ac.initial(batch_size)
