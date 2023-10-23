@@ -84,7 +84,7 @@ To get AMBS to work on [Safety Gym](https://github.com/openai/safety-gym) we nee
 ```
 python train.py ./logdir/safetygym/PointGoal1/shield_penl --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 1.0 --normalise_ret False --penl_critic_type vfunction --run.steps 500000
 ```  
-- *Probabilistic Logic Policy Gradient* (PLPG): renormalisation of the probabilities of the actions of the task policy, based on the level of safety. We recommend using the penalty critic in addition to PLPG. Example:
+- *Probabilistic Logic Policy Gradient* (PLPG) (based on this [paper](https://arxiv.org/abs/2303.03226)): renormalisation of the probabilities of the actions of the task policy, based on the level of safety. We recommend using the penalty critic in addition to PLPG. Example:
 ```
 python train.py --logdir ./logdir/safetygym/PointGoal1/shield_plpg --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 0.8 --plpg True --normalise_ret False --penl_critic_type vfunction --run.steps 500000
 ```
