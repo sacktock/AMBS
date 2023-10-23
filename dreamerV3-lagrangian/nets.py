@@ -446,7 +446,7 @@ class Dist(nj.Module):
   def __init__(
       self, shape, dist='mse', outscale=0.1, outnorm=False, minstd=1.0,
       maxstd=1.0, unimix=0.0, bins=255):
-    assert all(isinstance(dim, int) for dim in shape), shape
+    #assert all(isinstance(dim, int) for dim in shape), shape
     self._shape = shape
     self._dist = dist
     self._minstd = minstd

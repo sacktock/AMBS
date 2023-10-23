@@ -112,6 +112,7 @@ class Agent(nj.Module):
         value = value.astype(jnp.float32)
       obs[key] = value
     obs['cont'] = 1.0 - obs['is_terminal'].astype(jnp.float32)
+    obs['cost'] = jnp.clip(obs['cost'], 0.0, self.config.env.safetygym.cost_val)
     return obs
 
 
@@ -195,7 +196,9 @@ class WorldModel(nj.Module):
     cont = self.heads['cont'](traj).mode()
     traj['cont'] = jnp.concatenate([first_cont[None], cont[1:]], 0)
     discount = 1 - 1 / self.config.horizon
+    safety_discount = 1 - 1 / self.config.safety_horizon
     traj['weight'] = jnp.cumprod(discount * traj['cont'], 0) / discount
+    traj['safe_weight'] = jnp.cumprod(safety_discount * traj['cont'], 0) / safety_discount
     return traj
 
   def report(self, data):
@@ -263,7 +266,7 @@ class ImagActorCritic(nj.Module):
     self.opt = jaxutils.Optimizer(name='actor_opt', **config.actor_opt)
       
     discount = 1 - 1 / config.horizon
-    self.cost_threshold = config.env.atari.cost_val * pow(discount, config.safety_horizon)
+    self.cost_threshold = config.cost_threshold
     self.lagrange_mult = nj.Variable(jnp.array, self.config.lagrange_mult, jnp.float32, name="lagran_mult")
     self.penalty_mult = nj.Variable(jnp.array, self.config.penalty_mult, jnp.float32, name="pen_mult")
     self.penalty_pow = self.config.penalty_pow
@@ -292,17 +295,41 @@ class ImagActorCritic(nj.Module):
     advs = []
     total = sum(self.scales[k] for k in self.critics)
     for key, critic in self.critics.items():
-      if self.scales[key] == 0.0:
-        continue
-      rew, ret, base = critic.score(traj, self.actor)
-      offset, invscale = self.retnorms[key](ret)
-      normed_ret = (ret - offset) / invscale
-      normed_base = (base - offset) / invscale
-      advs.append((normed_ret - normed_base) * self.scales[key] / total)
-      metrics.update(jaxutils.tensorstats(rew, f'{key}_reward'))
-      metrics.update(jaxutils.tensorstats(ret, f'{key}_return_raw'))
-      metrics.update(jaxutils.tensorstats(normed_ret, f'{key}_return_normed'))
-      metrics[f'{key}_return_rate'] = (jnp.abs(ret) >= 0.5).mean()
+      if key == 'cost':
+        rew, ret, base = critic.score(traj, self.actor)
+        obj = ret - self.cost_threshold
+        lambd = self.lagrange_mult.read()
+        mult = self.penalty_mult.read()
+        cond = lambd + mult * obj
+        self.lagrange_mult.write(jnp.maximum(0.0, jnp.mean(cond)))
+        # check signs?
+        psi = jnp.where(cond > 0.0,
+                      lambd * obj + mult / 2.0 * obj ** 2,
+                      -1.0/(2.0 * mult) * lambd ** 2)
+        # Use max for clip here?
+        self.penalty_mult.write(jnp.maximum(mult * (self.penalty_pow + 1.0), 1.0))
+        #self.penalty_mult.write(jnp.clip(mult * (self.penalty_pow + 1.0), mult, 1.0))
+        metrics.update({
+          'lagrange_multiplier': lambd,
+          'penalty_multiplier': mult,
+          'penalty_avg': jnp.mean(psi),
+          'safety_cond_avg': jnp.mean(cond),
+          'penalty_max': jnp.max(psi),
+          'safety_cond_max': jnp.max(cond),
+          'penalty_min': jnp.min(psi),
+          'safety_cond_min': jnp.min(cond),
+        })
+        advs.append(-psi.astype(jnp.float32))
+      else:
+        rew, ret, base = critic.score(traj, self.actor)
+        offset, invscale = self.retnorms[key](ret)
+        normed_ret = (ret - offset) / invscale
+        normed_base = (base - offset) / invscale
+        advs.append((normed_ret - normed_base) * self.scales[key] / total)
+        metrics.update(jaxutils.tensorstats(rew, f'{key}_reward'))
+        metrics.update(jaxutils.tensorstats(ret, f'{key}_return_raw'))
+        metrics.update(jaxutils.tensorstats(normed_ret, f'{key}_return_normed'))
+        metrics[f'{key}_return_rate'] = (jnp.abs(ret) >= 0.5).mean()
     adv = jnp.stack(advs).sum(0)
     policy = self.actor(sg(traj))
     logpi = policy.log_prob(sg(traj['action']))[:-1]
@@ -313,36 +340,7 @@ class ImagActorCritic(nj.Module):
     loss *= self.config.loss_scales.actor
     metrics.update(self._metrics(traj, policy, logpi, ent, adv))
 
-    key = 'cost'
-    if key in self.critics.keys():
-      critic = self.critics[key]
-      rew, ret, base = critic.score(traj, self.actor)
-      obj = jnp.mean(sg(ret) - self.cost_threshold)
-      lambd = self.lagrange_mult.read()
-      mult = self.penalty_mult.read()
-      cond = lambd + mult * obj
-      self.lagrange_mult.write(jnp.maximum(0, cond))
-      psi = jnp.where(cond > 0.0,
-                      lambd * obj + mult / 2.0 * obj ** 2,
-                      -1.0/(2.0 * mult) * lambd ** 2)
-      self.penalty_mult.write(jnp.clip(mult * (self.penalty_pow + 1.0), mult, 1.0))
-      offset, invscale = self.retnorms[key](ret)
-      normed_ret = (ret - offset) / invscale
-      metrics.update(jaxutils.tensorstats(rew, f'{key}_reward'))
-      metrics.update(jaxutils.tensorstats(ret, f'{key}_return_raw'))
-      metrics.update(jaxutils.tensorstats(normed_ret, f'{key}_return_normed'))
-      metrics[f'{key}_return_rate'] = (jnp.abs(ret) >= 0.5).mean()
-      metrics.update({
-        'lagrange_multiplier': lambd,
-        'penalty_multiplier': mult,
-        'penalty': psi,
-        'safety_cond': cond,
-      })
-      loss_penalty = psi.astype(jnp.float32)
-    else:
-      loss_penalty = 0.0
-
-    return loss.mean() + loss_penalty, metrics
+    return loss.mean(), metrics
 
   def _metrics(self, traj, policy, logpi, ent, adv):
     metrics = {}
@@ -396,7 +394,12 @@ class VFunction(nj.Module):
     else:
       raise NotImplementedError(self.args.critic_slowreg)
     loss += self.config.loss_scales.slowreg * reg
-    loss = (loss * sg(traj['weight'])).mean()
+    if self.args.critic_cont_fn == 'cont':
+      loss = (loss * sg(traj['weight'])).mean()
+    elif self.args.critic_cont_fn == 'safe_cont':
+      loss = (loss * sg(traj['safe_weight'])).mean()
+    else:
+      raise NotImplementedError(self.args.critic_cont_fn)
     loss *= self.config.loss_scales.critic
     metrics = jaxutils.tensorstats(dist.mean())
     return loss, metrics
@@ -405,7 +408,7 @@ class VFunction(nj.Module):
     rew = self.rewfn(traj)
     assert len(rew) == len(traj['action']) - 1, (
         'should provide rewards for all but last action')
-    discount = 1 - 1 / self.config.horizon
+    discount = 1 - 1 / self.args.horizon
     disc = traj['cont'][1:] * discount
     value = self.net(traj).mean()
     vals = [value[-1]]

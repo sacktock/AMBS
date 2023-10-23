@@ -37,6 +37,7 @@ def make_env(config, **overrides):
     suite, task = config.task.split('_', 1)
     ctor = {
         'atari': 'embodied.envs.atari:Atari',
+        'safetygym' : 'embodied.envs.safetygym:SafetyGym',
     }[suite]
     if isinstance(ctor, str):
         module, cls = ctor.split(':')
@@ -54,8 +55,18 @@ def wrap_env(env, config):
             continue
         elif space.discrete:
             env = wrappers.OneHotAction(env, name)
+        elif args.discretize:
+            env = wrappers.DiscretizeAction(env, name, args.discretize)
+        else:
+            env = wrappers.NormalizeAction(env, name)
     env = wrappers.ExpandScalars(env)
-    env = wrappers.TimeLimit(env, args.length, args.reset)
+    if args.length:
+        env = wrappers.TimeLimit(env, args.length, args.reset)
+    if args.checks:
+        env = wrappers.CheckSpaces(env)
+    for name, space in env.act_space.items():
+        if not space.discrete:
+            env = wrappers.ClipAction(env, name)
     return env
 
 def main(argv=None):
@@ -70,10 +81,12 @@ def main(argv=None):
     print(config)
 
     suite, task = config.task.split('_', 1)
-    assert suite in ['atari'], f'Suite {suite} is not supported for model checking.'
-    assert task in prop_map.keys(), f'Environment {config.task} not supported for model checking.'
-    safety_labels = config.env.atari.labels if hasattr(config.env.atari, 'labels') else []
-    assert safety_labels is not [], "No safety labels specified!"
+    assert suite in ['atari', 'safetygym'], f'Suite {suite} is not supported for model checking.'
+    if suite == 'atari':
+        assert task in prop_map.keys(), f'Environment {config.task} not supported for model checking.'
+        safety_labels = config.env.atari.labels if hasattr(config.env.atari, 'labels') else []
+        assert safety_labels is not [], "No safety labels specified!"
+        print(f'Training on {config.task} with safety labels {safety_labels}')
 
     logdir = embodied.Path(args.logdir)
     logdir.mkdirs()
@@ -89,8 +102,6 @@ def main(argv=None):
         # embodied.logger.WandBOutput(logdir.name, config),
         # embodied.logger.MLFlowOutput(logdir.name),
     ], multiplier)
-
-    print(f'Training on {config.task} with safety labels {safety_labels}')
 
     is_eval = False
     rate_limit = False
@@ -160,10 +171,13 @@ def main(argv=None):
         cumul_metrics = {'total_violations': 0.0}
 
     def per_episode(ep, cumul_metrics):
-        length = len(ep['reward']) - 1
+        suite, task = config.task.split('_', 1)
+        kwargs = config.env.get(suite, {})
+        print(kwargs)
+        length = (len(ep['reward']) - 1) * kwargs['repeat']
         score = float(ep['reward'].astype(np.float64).sum())
         cost = float(ep['cost'].astype(np.float64).sum())
-        violations = cost / config.env.atari.cost_val
+        violations = cost / kwargs['cost_val']
         sum_abs_reward = float(np.abs(ep['reward']).astype(np.float64).sum())
         cumul_metrics['total_violations'] += violations
         logger.add({

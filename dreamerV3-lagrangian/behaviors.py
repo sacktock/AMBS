@@ -27,12 +27,15 @@ class Greedy(nj.Module):
         else:
           raise NotImplementedError(config.critic_type)
       if key == 'cost':
-        costfn = lambda s: wm.heads['cost'](s).mean()[1:]
+        costfn = lambda s: jnp.clip(wm.heads['cost'](s).mean()[1:], 0.0, self.config.env.safetygym.cost_val)
         args = embodied.Config(
           critic=self.config.safety_critic, critic_opt=self.config.safety_critic_opt,
           slow_critic_fraction=self.config.slow_safety_critic_fraction,
           slow_critic_update=self.config.slow_safety_critic_update,
-          critic_slowreg=self.config.safety_critic_slowreg)
+          critic_slowreg=self.config.safety_critic_slowreg,
+          critic_cont_fn=self.config.safety_critic_cont_fn,
+          horizon=self.config.safety_horizon
+          )
         if config.safety_critic_type == 'vfunction':
           critics[key] = agent.VFunction(costfn, config, args, name=key)
         else:
