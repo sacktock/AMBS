@@ -1,10 +1,12 @@
-**Supplementary material** can be found here https://github.com/sacktock/AMBS/blob/main/supplementary-material.pdf. Also, feel free to visit the full paper paper here https://arxiv.org/abs/2308.00707
+**Supplementary material** can be found here https://github.com/sacktock/AMBS/blob/main/supplementary-material.pdf. Also, feel free to visit our papers here:
+- https://arxiv.org/abs/2308.00707
+- http://arxiv.org/abs/2402.00816
 
 *AMBS is now compatible with* [Safety Gym](https://github.com/openai/safety-gym)
 
 # AMBS
 
-GitHub repository for "Approximate Model-Based Shielding for Safe Reinforcement Learning"
+GitHub repository for "Approximate Model-Based Shielding for Safe Reinforcement Learning" and "Leveraging Approximate Model-based Shielding for Probabilistic Safety Guarantees in Continuous Environments".
 
 # Main Idea
 
@@ -93,7 +95,7 @@ python train.py --logdir ./logdir/safetygym/PointGoal1/shield_plpg --configs saf
 python train.py --logdir ./logdir/safetygym/PointGoal1/shield_copt --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 1.0 --copt True --normalise_ret False --penl_critic_type vfunction  --run.steps 500000
 ```
 
-We will share our research paper outlining these techniques and our results on Safety Gym after the peer review process is complete. In the meantime please feel free to contact me directly through my personal email if you have any questions.
+Our research paper outlining these techniques can be found here: http://arxiv.org/abs/2402.00816
 
 # Acks
 
