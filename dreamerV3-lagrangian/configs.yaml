@@ -54,6 +54,7 @@ defaults:
     minecraft: {size: [64, 64], break_speed: 100.0}
     dmc: {size: [64, 64], repeat: 2, camera: -1}
     loconav: {size: [64, 64], repeat: 2, camera: -1}
+    safetygym: {size: [64, 64], repeat: 2, length: 1000, vision: False, render_type: rgb_image, cost_val: 1.0}
 
   # Agent
   task_behavior: Greedy
@@ -69,7 +70,7 @@ defaults:
   decoder: {mlp_keys: '.*', cnn_keys: '.*', act: silu, norm: layer, mlp_layers: 5, mlp_units: 1024, cnn: resnet, cnn_depth: 96, cnn_blocks: 0, image_dist: mse, vector_dist: symlog_mse, inputs: [deter, stoch], resize: stride, winit: normal, fan: avg, outscale: 1.0, minres: 4, cnn_sigmoid: False}
   reward_head: {layers: 5, units: 1024, act: silu, norm: layer, dist: symlog_disc, outscale: 0.0, outnorm: False, inputs: [deter, stoch], winit: normal, fan: avg, bins: 255}
   cont_head: {layers: 5, units: 1024, act: silu, norm: layer, dist: binary, outscale: 1.0, outnorm: False, inputs: [deter, stoch], winit: normal, fan: avg}
-  cost_head: {layers: 5, units: 1024, act: silu, norm: layer, dist: symlog_disc, outscale: 0.0, outnorm: False, inputs: [deter, stoch], winit: normal, fan: avg, bins: 255}
+  cost_head: {layers: 5, units: 1024, act: silu, norm: layer, dist: binary, outscale: 1.0, outnorm: False, inputs: [deter, stoch], winit: normal, fan: avg}
   loss_scales: {image: 1.0, vector: 1.0, reward: 1.0, cont: 1.0, cost: 1.0, dyn: 0.5, rep: 0.1, actor: 1.0, critic: 1.0, slowreg: 1.0}
   dyn_loss: {impl: kl, free: 1.0}
   rep_loss: {impl: kl, free: 1.0}
@@ -90,6 +91,7 @@ defaults:
   horizon: 333
   return_lambda: 0.95
   critic_slowreg: logprob
+  critic_cont_fn: cont
   slow_critic_update: 1
   slow_critic_fraction: 0.02
   retnorm: {impl: perc_ema, decay: 0.99, max: 1.0, perclo: 5.0, perchi: 95.0}
@@ -103,19 +105,21 @@ defaults:
   disag_models: 8
 
   # Constrained Policy Optimisation
-  safety_horizon: 30
   penalty_mult: 5e-9
-  lagrange_mult: 1e-6
-  penalty_pow: 1e-5
+  lagrange_mult: 0.01
+  penalty_pow: 1e-6
+  cost_threshold: 1.0
 
   # Safety Critic
   bootstrap_cost: True
   safety_critic: {layers: 5, units: 1024, act: silu, norm: layer, dist: symlog_disc, outscale: 0.0, outnorm: False, inputs: [deter, stoch], winit: normal, fan: avg, bins: 255, symlog_inputs: False}
-  safety_critic_opt: {opt: adam, lr: 3e-5, eps: 1e-5, clip: 50.0, wd: 0.0, warmup: 0, lateclip: 0.0}
+  safety_critic_opt: {opt: adam, lr: 3e-5, eps: 1e-5, clip: 100.0, wd: 0.0, warmup: 0, lateclip: 0.0}
   safety_critic_slowreg: logprob
   safety_critic_type: 'vfunction'
+  safety_critic_cont_fn: cont
   slow_safety_critic_update: 1
   slow_safety_critic_fraction: 0.02
+  safety_horizon: 333
 
 minecraft:
 
@@ -231,6 +235,70 @@ dmc_proprio:
   .*\.units: 512
   encoder: {mlp_keys: '.*', cnn_keys: '$^'}
   decoder: {mlp_keys: '.*', cnn_keys: '$^'}
+
+safetygym:
+
+  task: safetygym_Safexp-PointGoal1-v0
+  run.log_keys_video: [none]
+  run.train_ratio: 64
+  rssm.deter: 512
+  .*\.cnn_depth: 32
+  .*\.layers: 2
+  .*\.units: 512
+  encoder: {mlp_keys: '.*', cnn_keys: '$^'}
+  decoder: {mlp_keys: '.*', cnn_keys: '$^'}
+
+safetygym_vision:
+  task: safetygym_Safexp-PointGoal1-v0
+  run.train_ratio: 512
+  envs.amount: 8
+  rssm.deter: 2048
+  .*\.cnn_depth: 64
+  .*\.units: 768
+  .*\.layers: 4
+  encoder: {mlp_keys: '$^', cnn_keys: 'image', mlp_layers: 2}
+  decoder: {mlp_keys: '$^', cnn_keys: 'image', mlp_layers: 2}
+  env:
+    safetygym: {vision: True, render_type: rgb_image}
+
+safetygym_vision10m:
+  task: safetygym_Safexp-PointGoal1-v0
+  run.train_ratio: 64
+  run.steps: 5000000
+  run.train_fill: 5000
+  envs.amount: 8
+  rssm.deter: 2048
+  .*\.cnn_depth: 64
+  .*\.units: 768
+  .*\.layers: 4
+  encoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  decoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  env:
+    safetygym: {vision: True, render_type: rgb_image}
+
+safetygym_lambda:
+  task: safetygym_Safexp-PointGoal1-v0
+  run.train_fill: 5000
+  batch_size: 32
+  batch_length: 50
+  run.train_ratio: 160
+  horizon: 100
+  rssm: {deter: 200, units: 400, stoch: 30}
+  .*\.cnn_depth: 48
+  .*\.layers: 5
+  .*\.units: 400
+  dyn_loss: {free: 3.0}
+  rep_loss: {free: 3.0}
+  encoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  decoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  actor_opt: {lr: 8e-5, clip: 5.0}
+  critic_opt: {lr: 8e-5, clip: 1.0}
+  model_opt: {clip: 100.0}
+  safety_critic_opt: {lr: 2e-4,  clip: 50.0}
+  safety_horizon: 333
+  loss_scales: {cost: 100.0}
+  env:
+    safetygym: {vision: True, render_type: rgb_image}
 
 bsuite:
 

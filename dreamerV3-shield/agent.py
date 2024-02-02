@@ -134,11 +134,15 @@ class Agent(nj.Module):
     metrics.update(mets)
     context = {**data, **wm_outs['post']}
     start = tree_map(lambda x: x.reshape([-1] + list(x.shape[2:])), context)
-    _, mets = self.task_behavior.train(self.wm.imagine, start, context)
-    metrics.update({'task_' + key: value for key, value in mets.items()})
     if self.config.shielding:
       _, mets = self.safe_behavior.train(self.wm.imagine, start, context)
       metrics.update({'safe_' + key: value for key, value in mets.items()})
+      if self.config.plpg:
+        context.update({
+          'safe_valuefn': self.safe_behavior.ac.critics['cost'],
+        })
+    _, mets = self.task_behavior.train(self.wm.imagine, start, context)
+    metrics.update({'task_' + key: value for key, value in mets.items()})
     if self.config.expl_behavior != 'None':
       _, mets = self.expl_behavior.train(self.wm.imagine, start, context)
       metrics.update({'expl_' + key: value for key, value in mets.items()})
@@ -171,7 +175,8 @@ class Agent(nj.Module):
         value = value.astype(jnp.float32)
       obs[key] = value
     obs['cont'] = 1.0 - obs['is_terminal'].astype(jnp.float32)
-    obs['safe_cont'] = 1.0 - (obs['cost'] > 0.0) .astype(jnp.float32)
+    obs['safe_cont'] = 1.0 - (obs['cost'] > 0.0).astype(jnp.float32)
+    obs['cost'] = jnp.clip(obs['cost'], 0.0, self.config.env.safetygym.cost_val)
     return obs
 
 
@@ -194,8 +199,8 @@ class WorldModel(nj.Module):
         'cost': nets.MLP((), **config.cost_head, name='cost'),
         'safe_cont': nets.MLP((), **config.safe_cont_head, name='safe_cont')
       })
-      discount = 1 - 1 / config.horizon
-      self._delta = config.env.atari.cost_val * pow(discount, self.config.shield_horizon)
+      discount = 1 - 1 / config.safety_horizon
+      self._delta = config.env.safetygym.cost_val * pow(discount, self.config.shield_horizon)
     self.opt = jaxutils.Optimizer(name='model_opt', **config.model_opt)
     scales = self.config.loss_scales.copy()
     image, vector = scales.pop('image'), scales.pop('vector')
@@ -262,12 +267,13 @@ class WorldModel(nj.Module):
     cont = self.heads['cont'](traj).mode()
     traj['cont'] = jnp.concatenate([first_cont[None], cont[1:]], 0)
     discount = 1 - 1 / self.config.horizon
+    safety_discount = 1 - 1 / self.config.safety_horizon
     traj['weight'] = jnp.cumprod(discount * traj['cont'], 0) / discount
     if self.config.shielding:
       assert 'safe_cont' in self.heads.keys()
       safe_cont = self.heads['safe_cont'](traj).mode()
       traj['safe_cont'] = jnp.concatenate([first_safe_cont[None], safe_cont[1:]], 0)
-      traj['safe_weight'] = jnp.cumprod(discount * traj['safe_cont'], 0) / discount
+      traj['safe_weight'] = jnp.cumprod(safety_discount * traj['safe_cont'], 0) / safety_discount
     return traj
 
   def shield(self, imag_behavior, latent, obs, horizon):
@@ -295,14 +301,14 @@ class WorldModel(nj.Module):
     cont = self.heads['cont'](traj).mode()
     # Think about clipping the cost and/or value function
     traj['cont'] = jnp.concatenate([first_cont[None], cont[1:]], 0)
-    traj['cost'] = self.heads['cost'](traj).mean()[1:]
-    discount = 1 - 1 / self.config.horizon
+    traj['cost'] = jnp.clip(self.heads['cost'](traj).mean()[1:], 0.0, self.config.env.safetygym.cost_val)
+    discount = 1 - 1 / self.config.safety_horizon
     # Compute the discounted return
     if self.config.shield_bootstrap:
-      valuefn = lambda tr: imag_behavior.critics['cost'].valuefn(tr)
+      valuefn = lambda tr: jnp.clip(imag_behavior.critics['cost'].valuefn(tr), 0.0, self.config.env.safetygym.cost_val)
     else:
       valuefn = None
-    ret = disc_return(traj, discount, valuefn)[0]
+    ret = disc_cost(traj, discount, valuefn)[0]
     x = (ret > self._delta).astype(jnp.float32)
     # Return the vector of probabilities
     prob = jnp.array([jnp.mean(x[i:i+self.config.shield_samples]) \
@@ -359,7 +365,7 @@ class WorldModel(nj.Module):
 
 class ImagActorCritic(nj.Module):
 
-  def __init__(self, critics, scales, act_space, config):
+  def __init__(self, critics, scales, act_space, config, args={}):
     critics = {k: v for k, v in critics.items() if k in scales.keys()}
     for key, scale in scales.items():
       assert not scale or key in critics, key
@@ -367,6 +373,7 @@ class ImagActorCritic(nj.Module):
     self.scales = scales
     self.act_space = act_space
     self.config = config
+    self.args = args if args else config
     disc = act_space.discrete
     self.grad = config.actor_grad_disc if disc else config.actor_grad_cont
     self.actor = nets.MLP(
@@ -375,7 +382,7 @@ class ImagActorCritic(nj.Module):
     self.retnorms = {
         k: jaxutils.Moments(**config.retnorm, name=f'retnorm_{k}')
         for k in critics}
-    self.opt = jaxutils.Optimizer(name='actor_opt', **config.actor_opt)
+    self.opt = jaxutils.Optimizer(name='actor_opt', **self.args.actor_opt)
 
   def initial(self, batch_size):
     return {}
@@ -384,30 +391,67 @@ class ImagActorCritic(nj.Module):
     return {'action': self.actor(state)}, carry
 
   def train(self, imagine, start, context):
-    def loss(start):
+    if 'safe_valuefn' in context.keys():
+      assert self.config.plpg
+    safe_valuefn = context.get('safe_valuefn', None)
+    def loss(start, safe_valuefn):
       policy = lambda s: self.actor(sg(s)).sample(seed=nj.rng())
       traj = imagine(policy, start, self.config.imag_horizon)
-      loss, metrics = self.loss(traj)
+      loss, metrics = self.loss(traj, safe_valuefn=safe_valuefn)
       return loss, (traj, metrics)
-    mets, (traj, metrics) = self.opt(self.actor, loss, start, has_aux=True)
+    mets, (traj, metrics) = self.opt(self.actor, loss, start, safe_valuefn, has_aux=True)
     metrics.update(mets)
     for key, critic in self.critics.items():
       mets = critic.train(traj, self.actor)
       metrics.update({f'{key}_critic_{k}': v for k, v in mets.items()})
     return traj, metrics
 
-  def loss(self, traj):
+  def loss(self, traj, safe_valuefn=None):
     metrics = {}
     advs = []
-    total = sum(self.scales[k] for k in self.critics)
+    if self.config.normalise_ret:
+      total = sum(self.scales[k] for k in self.critics)
+    else:
+      total = 1.0
+
     for key, critic in self.critics.items():
-      if self.scales[key] == 0.0:
+      scale = self.scales[key]
+      if scale == 0.0:
         continue
       rew, ret, base = critic.score(traj, self.actor)
       offset, invscale = self.retnorms[key](ret)
       normed_ret = (ret - offset) / invscale
       normed_base = (base - offset) / invscale
-      advs.append((normed_ret - normed_base) * self.scales[key] / total)
+      if key == 'extr' and self.config.plpg:
+        assert safe_valuefn is not None
+        td_error = safe_valuefn.compute_tds(traj, self.actor)
+        td_error = jnp.clip(td_error, None, 0.0)
+        exp_td_error = jnp.exp(td_error)
+        clipped_exp_td_error = jnp.clip(exp_td_error, 1e-6, 1.0)
+        metrics.update({
+          'plpg_td_error_avg': jnp.mean(clipped_exp_td_error),
+          'plpg_td_error_max': jnp.max(clipped_exp_td_error),
+          'plpg_td_error_min': jnp.min(clipped_exp_td_error),
+        })
+        adv = ((normed_ret - normed_base) * clipped_exp_td_error) * scale / total
+      else:
+        adv = (normed_ret - normed_base) * scale / total
+      if key == 'extr' and self.config.copt:
+        assert 'cost' in self.critics.keys()
+        costvalue_fn = lambda tr: jnp.clip(self.critics['cost'].valuefn(tr), 0.0, self.config.env.safetygym.cost_val)
+        discount = 1 - 1 / self.config.safety_horizon
+        traj['cost'] = self.critics['cost'].rewfn(traj)
+        cost = disc_cost(traj, discount, costvalue_fn)
+        weights = jnp_sigmoid(cost, scale=self.config.sigmoid_scale, 
+          loc=self.config.env.safetygym.cost_val * pow(discount, self.config.shield_horizon))
+        metrics.update({
+          'copt_weights_avg': jnp.mean(weights),
+          'copt_weights_max': jnp.max(weights),
+          'copt_weights_min': jnp.min(weights),
+        })
+        adv = adv * (1.0 - sg(weights))
+      advs.append(adv)
+  
       metrics.update(jaxutils.tensorstats(rew, f'{key}_reward'))
       metrics.update(jaxutils.tensorstats(ret, f'{key}_return_raw'))
       metrics.update(jaxutils.tensorstats(normed_ret, f'{key}_return_normed'))
@@ -489,7 +533,7 @@ class VFunction(nj.Module):
     rew = self.rewfn(traj)
     assert len(rew) == len(traj['action']) - 1, (
         'should provide rewards for all but last action')
-    discount = 1 - 1 / self.config.horizon
+    discount = 1 - 1 / self.args.horizon
     if self.args.critic_cont_fn == 'cont':
       disc = traj['cont'][1:] * discount
     elif self.args.critic_cont_fn == 'safe_cont':
@@ -503,6 +547,18 @@ class VFunction(nj.Module):
       vals.append(interm[t] + disc[t] * self.config.return_lambda * vals[-1])
     ret = jnp.stack(list(reversed(vals))[:-1])
     return rew, ret, value[:-1]
+
+  def compute_tds(self, traj, actor=None):
+    # Compute undiscounted td errors
+    rew = self.rewfn(traj)
+    assert len(rew) == len(traj['action']) - 1, (
+        'should provide rewards for all but last action')
+    value = self.valuefn(traj)
+    td_errors = []
+    for t in range(len(rew)):
+      td_errors.append(rew[t] + value[t+1] - value[t])
+    td_errors = jnp.stack(td_errors)
+    return td_errors
 
   def valuefn(self, traj):
     return self.net(traj).mean()
@@ -576,7 +632,7 @@ class TD3VFunction(nj.Module):
     rew = self.rewfn(traj)
     assert len(rew) == len(traj['action']) - 1, (
         'should provide rewards for all but last action')
-    discount = 1 - 1 / self.config.horizon
+    discount = 1 - 1 / self.args.horizon
     if self.args.critic_cont_fn == 'cont':
       disc = traj['cont'][1:] * discount
     elif self.args.critic_cont_fn == 'safe_cont':
@@ -591,6 +647,19 @@ class TD3VFunction(nj.Module):
     ret = jnp.stack(list(reversed(vals))[:-1])
     return rew, ret, value[:-1]
 
+  def compute_tds(self, traj, actor=None):
+    # Compute undiscounted td errors
+    rew = self.rewfn(traj)
+    assert len(rew) == len(traj['action']) - 1, (
+        'should provide rewards for all but last action')
+    value = self.valuefn(traj)
+    td_errors = []
+    for t in range(len(rew)):
+      td_error = rew[t] + value[t+1] - value[t]
+      td_errors.append(td_error)
+    td_errors = jnp.stack(td_errors)
+    return td_errors
+
   def valuefn(self, traj):
     value_1 = self.net_1(traj).mean()
     value_2 = self.net_2(traj).mean()
@@ -598,7 +667,7 @@ class TD3VFunction(nj.Module):
     return value
 
 
-def disc_return(traj, discount, valuefn=None):
+def disc_cost(traj, discount, valuefn=None):
   cost = traj['cost']
   assert len(cost) == len(traj['action']) - 1, (
         'should provide rewards for all but last action')
@@ -614,3 +683,10 @@ def disc_return(traj, discount, valuefn=None):
     vals.append(interm[t] + disc[t] * vals[-1])
   ret = jnp.stack(list(reversed(vals))[:-1])
   return ret
+
+def jnp_sigmoid(arr, scale=1.0, loc=0.0):
+  return jnp.where(arr >= 0.0,
+    1.0 / (1.0 + jnp.exp(scale * (-1.0) * (arr - loc))),
+    jnp.exp(scale * (arr - loc)) / (1.0 + jnp.exp(scale * (arr - loc))))
+
+

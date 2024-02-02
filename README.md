@@ -1,10 +1,12 @@
-**Supplementary material** can be found here https://github.com/sacktock/AMBS/blob/main/supplementary-material.pdf. Also, feel free to visit the full paper paper here https://arxiv.org/abs/2308.00707
+**Supplementary material** can be found here https://github.com/sacktock/AMBS/blob/main/supplementary-material.pdf. Also, feel free to visit our papers here:
+- https://arxiv.org/abs/2308.00707
+- http://arxiv.org/abs/2402.00816
 
-*Disclaimer* we are looking to integrate and extend the algorithm to work with SafetyGym, currently we do not claim our results hold in these sets of environments.
+*AMBS is now compatible with* [Safety Gym](https://github.com/openai/safety-gym)
 
 # AMBS
 
-GitHub repository for "Approximate Model-Based Shielding for Safe Reinforcement Learning"
+GitHub repository for "Approximate Model-Based Shielding for Safe Reinforcement Learning" and "Leveraging Approximate Model-based Shielding for Probabilistic Safety Guarantees in Continuous Environments".
 
 # Main Idea
 
@@ -65,6 +67,35 @@ For plotting runs we use tensorboard. Navigate to the relevant subdirectory and 
 cd dreamerV3-shield
 tensorboard --logdir ./logdir/seaquest
 ```
+
+# Safety Gym and Penalty Techniques
+
+Safety Gym is built on MuJoCo. For installation details of MuJoCo we refer you to [here](https://github.com/openai/mujoco-py). Additional requirements for Safety Gym include the following:
+```
+gym>=0.15.3
+joblib>=0.14.0
+mujoco_py>=2.0.2.7
+numpy>=1.17.4
+xmltodict>=0.12.0
+``` 
+*If you have followed the earlier setup and installation instructions, these dependencies may already be satisfied.*
+
+To get AMBS to work on [Safety Gym](https://github.com/openai/safety-gym) we need to penalise the (unshielded) task policy. We provide the following three penalty techniques that help AMBS converge to a policy that maximises reward and satisfies the safety constraints of the Safety Gym environments:
+
+- Penalty critic: a simple modification to the policy gradient that penalises unsafe states by providing introducing a weighted cost to the policy gradient. Example:
+```
+python train.py ./logdir/safetygym/PointGoal1/shield_penl --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 1.0 --normalise_ret False --penl_critic_type vfunction --run.steps 500000
+```  
+- *Probabilistic Logic Policy Gradient* (PLPG) (based on this [paper](https://arxiv.org/abs/2303.03226)): renormalisation of the probabilities of the actions of the task policy, based on the level of safety. We recommend using the penalty critic in addition to PLPG. Example:
+```
+python train.py --logdir ./logdir/safetygym/PointGoal1/shield_plpg --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 0.8 --plpg True --normalise_ret False --penl_critic_type vfunction --run.steps 500000
+```
+- *Counter Example Guided Policy Optimisation* (COPT): scaling the gradient of actions to zero when they lead to a safety-violation in the near future. We recommend using the penalty critic in addition to PLPG. Example:
+```
+python train.py --logdir ./logdir/safetygym/PointGoal1/shield_copt --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 1.0 --copt True --normalise_ret False --penl_critic_type vfunction  --run.steps 500000
+```
+
+Our research paper outlining these techniques can be found here: http://arxiv.org/abs/2402.00816
 
 # Acks
 

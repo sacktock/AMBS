@@ -54,6 +54,7 @@ defaults:
     minecraft: {size: [64, 64], break_speed: 100.0}
     dmc: {size: [64, 64], repeat: 2, camera: -1}
     loconav: {size: [64, 64], repeat: 2, camera: -1}
+    safetygym: {size: [64, 64], repeat: 2, length: 1000, vision: False, render_type: rgb_image, cost_val: 10.0}
 
   # Agent
   task_behavior: Greedy
@@ -110,6 +111,8 @@ defaults:
   shield_eps: 0.01
   shield_horizon: 30
   shield_samples: 512
+  penalty_coeff: 0.0
+  normalise_ret: True
 
   # Safety Critic
   shield_bootstrap: True
@@ -120,6 +123,22 @@ defaults:
   safety_critic_cont_fn: safe_cont
   slow_safety_critic_update: 1
   slow_safety_critic_fraction: 0.02
+  safety_horizon: 333
+
+  # Safe Actor Critic
+  safe_actor_opt: {opt: adam, lr: 3e-5, eps: 1e-5, clip: 100.0, wd: 0.0, warmup: 0, lateclip: 0.0}
+  safe_critic_opt: {opt: adam, lr: 3e-5, eps: 1e-5, clip: 100.0, wd: 0.0, warmup: 0, lateclip: 0.0}
+
+  # Penalty Critic
+  penl_critic_type: 'td3vfunction'
+  use_safety_critic_params: False
+  
+  # Probabilistic Logic Policy Gradient
+  plpg: False
+
+  # Counter Example Guided Policy Optimisation
+  copt: False
+  sigmoid_scale: 10.0
 
 minecraft:
 
@@ -237,6 +256,67 @@ dmc_proprio:
   .*\.units: 512
   encoder: {mlp_keys: '.*', cnn_keys: '$^'}
   decoder: {mlp_keys: '.*', cnn_keys: '$^'}
+
+safetygym:
+
+  task: safetygym_Safexp-PointGoal1-v0
+  run.log_keys_video: [none]
+  run.train_ratio: 64
+  rssm.deter: 512
+  .*\.cnn_depth: 32
+  .*\.layers: 2
+  .*\.units: 512
+  encoder: {mlp_keys: '.*', cnn_keys: '$^'}
+  decoder: {mlp_keys: '.*', cnn_keys: '$^'}
+
+
+safetygym_vision:
+  task: safetygym_Safexp-PointGoal1-v0
+  run.train_ratio: 512
+  envs.amount: 8
+  encoder: {mlp_keys: '$^', cnn_keys: 'image', mlp_layers: 2}
+  decoder: {mlp_keys: '$^', cnn_keys: 'image', mlp_layers: 2}
+  env:
+    safetygym: {vision: True, render_type: rgb_image}
+
+safetygym_vision10m:
+  task: safetygym_Safexp-PointGoal1-v0
+  run.train_ratio: 64
+  run.steps: 5000000
+  run.train_fill: 5000
+  envs.amount: 8
+  rssm.deter: 2048
+  .*\.cnn_depth: 64
+  .*\.units: 768
+  .*\.layers: 4
+  encoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  decoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  env:
+    safetygym: {vision: True, render_type: rgb_image}
+
+safetygym_lambda:
+  task: safetygym_Safexp-PointGoal1-v0
+  run.train_fill: 5000
+  batch_size: 32
+  batch_length: 50
+  run.train_ratio: 160
+  horizon: 100
+  rssm: {deter: 200, units: 400, stoch: 30}
+  .*\.cnn_depth: 48
+  .*\.layers: 5
+  .*\.units: 400
+  dyn_loss: {free: 3.0}
+  rep_loss: {free: 3.0}
+  encoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  decoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  actor_opt: {lr: 8e-5, clip: 5.0}
+  critic_opt: {lr: 8e-5, clip: 1.0}
+  model_opt: {clip: 100.0}
+  safety_critic_opt: {lr: 2e-4, clip: 50.0}
+  safety_horizon: 333
+  loss_scales: {cost: 100.0}
+  env:
+    safetygym: {vision: True, render_type: rgb_image}
 
 bsuite:
 
