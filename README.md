@@ -86,17 +86,19 @@ Safety Gym experiments need [MuJoCo](http://mujoco.org/) 2.1 and the Safety Gym 
 
 ```bash
 git clone https://github.com/sacktock/safety-gym
+cd safety-gym
+git checkout 227396a721ea03e4ee6e2223faf34df878270208
 ```
 
-First make sure `setup.py` has the following dependency list:
+That commit pins `mujoco-py` to `06c964d50e9acd2b0130be35c434441a574c905b`. `setup.py` should have this dependency list:
 
 ```python
 install_requires=[
         'gym>=0.15.3',
         'joblib>=0.14.0',
         'Cython==0.29.36',
-        'mujoco-py @ git+https://github.com/sacktock/mujoco-py.git@master',
-        'numpy>=1.17.4',
+        'mujoco-py @ git+https://github.com/sacktock/mujoco-py.git@06c964d50e9acd2b0130be35c434441a574c905b',
+        'numpy==1.26.4',
         'xmltodict>=0.12.0',
     ],
 ```
@@ -104,7 +106,6 @@ install_requires=[
 Then:
 
 ```bash
-cd safety-gym
 python -m pip install -e .
 ```
 

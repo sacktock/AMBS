@@ -88,7 +88,10 @@ jobs:
           curl -L --fail -o /tmp/mujoco210.tar.gz \
             https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
           tar -xzf /tmp/mujoco210.tar.gz -C "$HOME/.mujoco"
-          git clone --depth 1 https://github.com/sacktock/safety-gym /tmp/safety-gym
+          git init /tmp/safety-gym
+          git -C /tmp/safety-gym remote add origin https://github.com/sacktock/safety-gym.git
+          git -C /tmp/safety-gym fetch --depth 1 origin 227396a721ea03e4ee6e2223faf34df878270208
+          git -C /tmp/safety-gym checkout FETCH_HEAD
           # mujoco-py imports these from setup.py during the wheel build, before
           # install_requires is installed. --no-build-isolation only sees the venv.
           uv pip install \
