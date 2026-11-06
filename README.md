@@ -257,7 +257,21 @@ pip install "pytest>=9"
 pytest -v
 ```
 
-The test suite is small and checks that the scientific stack imports and that the packaged algorithms, Atari and Seaquest environments, and model-checking properties load.
+`pytest` is the local test run, and it is what the `tests` job runs. It checks that the scientific stack imports and that the packaged algorithms, Atari and Seaquest modules, and model-checking properties load. It does not install Atari ROMs or Safety Gym, and it does not start training.
+
+The full smoke matrix is a separate GitHub Actions job, `smoke`, and it is not part of `pytest`. That job runs on Ubuntu only. It calls `examples/smoke.py` for every algorithm and environment: DreamerV3 and Lagrangian DreamerV3 once per environment, and shielded DreamerV3 once per environment for `task_prod`, `safe_prod_sum`, `safe_prod_max`, and `safe_prod_cond`. Each cell is one debug CPU update. The job installs Atari ROMs for Assault and Seaquest, and MuJoCo 2.1 plus Safety Gym for PointGoal1. Those installs stay out of the local `pytest` run because the matrix is large and pulls in ROMs, MuJoCo, and a training launch per cell.
+
+One cell can still be launched locally:
+
+```bash
+# conda or pip
+python examples/smoke.py --algorithm dreamerv3-shield --env assault --shielding-type safe_prod_sum
+
+# uv
+uv run python examples/smoke.py --algorithm dreamerv3-shield --env assault --shielding-type safe_prod_sum
+```
+
+Assault and Seaquest need ROMs first (`uv sync --group smoke`, then `uv run --group smoke AutoROM --accept-license`). PointGoal1 needs the Safety Gym install above.
 
 ### Dependency sync
 

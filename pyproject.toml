@@ -43,6 +43,8 @@ ambs = ["**/configs.yaml"]
 [dependency-groups]
 dev = ["pytest>=9.0.3"]
 cuda12 = ["jax[cuda12]==0.4.30"]
+# Atari ROM installer for the CI smoke job. Not part of the default install.
+smoke = ["autorom[accept-rom-license]>=0.6.1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

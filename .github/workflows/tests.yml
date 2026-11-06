@@ -25,3 +25,82 @@ jobs:
         run: uv sync --group dev
       - name: Run tests
         run: uv run pytest -v
+  smoke:
+    name: smoke (${{ matrix.target.label }} / ${{ matrix.env }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [pointgoal1, assault, seaquest_property_1, seaquest_property_3]
+        target:
+          - algorithm: dreamerv3
+            shielding_type: ""
+            label: dreamerv3
+          - algorithm: dreamerv3-lag
+            shielding_type: ""
+            label: dreamerv3-lag
+          - algorithm: dreamerv3-shield
+            shielding_type: task_prod
+            label: dreamerv3-shield/task_prod
+          - algorithm: dreamerv3-shield
+            shielding_type: safe_prod_sum
+            label: dreamerv3-shield/safe_prod_sum
+          - algorithm: dreamerv3-shield
+            shielding_type: safe_prod_max
+            label: dreamerv3-shield/safe_prod_max
+          - algorithm: dreamerv3-shield
+            shielding_type: safe_prod_cond
+            label: dreamerv3-shield/safe_prod_cond
+    env:
+      JAX_PLATFORMS: cpu
+      MUJOCO_GL: osmesa
+      PYOPENGL_PLATFORM: osmesa
+      MUJOCO_PY_MUJOCO_PATH: /home/runner/.mujoco/mujoco210
+      LD_LIBRARY_PATH: /home/runner/.mujoco/mujoco210/bin
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - name: Install the project
+        run: uv sync --group dev --group smoke
+      - name: Install Atari ROMs
+        if: matrix.env != 'pointgoal1'
+        run: uv run --group smoke AutoROM --accept-license
+      - name: Install Safety Gym
+        if: matrix.env == 'pointgoal1'
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            libosmesa6 \
+            libosmesa6-dev \
+            libgl1 \
+            libglib2.0-0 \
+            libglew-dev \
+            libglfw3 \
+            patchelf
+          mkdir -p "$HOME/.mujoco"
+          curl -L --fail -o /tmp/mujoco210.tar.gz \
+            https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
+          tar -xzf /tmp/mujoco210.tar.gz -C "$HOME/.mujoco"
+          git clone --depth 1 https://github.com/sacktock/safety-gym /tmp/safety-gym
+          uv pip install "Cython==0.29.36" "joblib>=0.14.0" "xmltodict>=0.12.0"
+          uv pip install --no-build-isolation \
+            "mujoco-py @ git+https://github.com/sacktock/mujoco-py.git@master"
+          uv pip install --no-deps -e /tmp/safety-gym
+      - name: Run smoke
+        run: |
+          set -euxo pipefail
+          args=(
+            --algorithm "${{ matrix.target.algorithm }}"
+            --env "${{ matrix.env }}"
+          )
+          if [ -n "${{ matrix.target.shielding_type }}" ]; then
+            args+=(--shielding-type "${{ matrix.target.shielding_type }}")
+          fi
+          uv run --no-sync python examples/smoke.py "${args[@]}"
