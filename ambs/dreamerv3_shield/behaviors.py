@@ -107,15 +107,15 @@ class Safe(nj.Module):
           slow_critic_fraction=self.config.slow_critic_fraction,
           slow_critic_update=self.config.slow_critic_update,
           critic_slowreg=self.config.critic_slowreg,
-          critic_cont_fn=self.config.safe_critic_cont_fn,
+          critic_cont_fn=self.config.critic_cont_fn,
           horizon=self.config.horizon
           )
-        if config.safe_critic_type == 'td3vfunction':
+        if config.critic_type == 'td3vfunction':
           critics[key] = agent.TD3VFunction(rewfn, config, args, name=key)
-        elif config.safe_critic_type == 'vfunction':
+        elif config.critic_type == 'vfunction':
           critics[key] = agent.VFunction(rewfn, config, args, name=key)
         else:
-          raise NotImplementedError(config.safe_critic_type)
+          raise NotImplementedError(config.critic_type)
       if key == 'cost':
         costfn = lambda s: jnp.clip(wm.heads['cost'](s).mean()[1:], 0.0, self.cost_val)
         args = embodied.Config(

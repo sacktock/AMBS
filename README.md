@@ -162,7 +162,9 @@ Suites:
 
 Shielded runs take `--shielding_type` of `task_prod`, `safe_prod_sum`, `safe_prod_max`, or `safe_prod_cond`. Penalty training still uses `--penalty_coeff`, `--plpg`, and `--copt`.
 
-DreamerV3 with shielding on Seaquest for the Atari labels, 10M environment steps:
+### AMBS
+
+Reproduce the Atari Seaquest results from [Approximate Model-Based Shielding for Safe Reinforcement Learning](https://arxiv.org/abs/2308.00707). This run shields with `task_prod` and the labels `death`, `early-surface`, and `out-of-oxygen`.
 
 ```bash
 ambs train dreamerv3-shield \
@@ -174,18 +176,11 @@ ambs train dreamerv3-shield \
   --run.steps 10000000
 ```
 
-Seaquest property 3 with a safe-product shield:
+### AMBS (SafetyGym)
 
-```bash
-ambs train dreamerv3-shield \
-  --logdir ./logdir/seaquest/safe_prod_sum \
-  --configs seaquest medium \
-  --shielding_type safe_prod_sum \
-  --env.seaquest.property_file property_3 \
-  --run.steps 5000000
-```
+Reproduce PointGoal1 from [Leveraging Approximate Model-based Shielding for Probabilistic Safety Guarantees in Continuous Environments](http://arxiv.org/abs/2402.00816). The three commands are the penalization techniques from that paper: a penalty critic, probabilistic logic policy gradient (PLPG), and counter-example guided policy optimisation (COPT).
 
-PointGoal1 with the penalty critic:
+Penalty critic:
 
 ```bash
 ambs train dreamerv3-shield \
@@ -226,6 +221,47 @@ ambs train dreamerv3-shield \
   --run.steps 500000
 ```
 
+### RecReg
+
+Reproduce Seaquest property 3 from [RECREG: Recovery-based Shielding for Regular Safety Properties in Reinforcement Learning](https://arxiv.org/abs/2610.23445). `safe_prod_sum`, `safe_prod_max`, and `safe_prod_cond` are the latent risk estimators from that paper.
+
+- `safe_prod_sum` sums the predicted probabilities and clips the total at 1. This is an implicit union bound.
+- `safe_prod_max` takes the maximum predicted probability. This is the correct aggregation when the cost head is deterministic or nearly deterministic.
+- `safe_prod_cond` assumes conditional independence across the lookahead and uses `1 - \prod (1 - \hat{p})`.
+
+`safe_prod_sum`:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/seaquest/safe_prod_sum \
+  --configs seaquest medium \
+  --shielding_type safe_prod_sum \
+  --env.seaquest.property_file property_3 \
+  --run.steps 5000000
+```
+
+`safe_prod_max`:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/seaquest/safe_prod_max \
+  --configs seaquest medium \
+  --shielding_type safe_prod_max \
+  --env.seaquest.property_file property_3 \
+  --run.steps 5000000
+```
+
+`safe_prod_cond`:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/seaquest/safe_prod_cond \
+  --configs seaquest medium \
+  --shielding_type safe_prod_cond \
+  --env.seaquest.property_file property_3 \
+  --run.steps 5000000
+```
+
 `examples/smoke.py` launches one debug CPU run (a short prefill plus one training chunk) for a chosen algorithm, environment, and, for the shield, shielding type:
 
 ```bash
@@ -239,6 +275,8 @@ tensorboard --logdir ./logdir/seaquest
 ```
 
 ## Contributing
+
+Contributions must pass the test matrix without breaking existing behavior. The matrix is split three ways. Locally, `pytest` checks that the scientific stack and package import. In GitHub Actions, the `smoke` job runs the full algorithm and environment training matrix. Dependency changes must also keep `requirements.txt` and `pyproject.toml` in lockstep.
 
 ### Tests
 

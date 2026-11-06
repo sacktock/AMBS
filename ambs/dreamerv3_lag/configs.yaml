@@ -112,7 +112,7 @@ defaults:
   safety_critic: {layers: 5, units: 1024, act: silu, norm: layer, dist: symlog_disc, outscale: 0.0, outnorm: False, inputs: [deter, stoch], winit: normal, fan: avg, bins: 255, symlog_inputs: False}
   safety_critic_opt: {opt: adam, lr: 3e-5, eps: 1e-5, clip: 100.0, wd: 0.0, warmup: 0, lateclip: 0.0}
   safety_critic_slowreg: logprob
-  safety_critic_type: 'vfunction'
+  safety_critic_type: vfunction
   safety_critic_cont_fn: cont
   slow_safety_critic_update: 1
   slow_safety_critic_fraction: 0.02
