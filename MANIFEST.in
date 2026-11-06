@@ -1,0 +1,5 @@
+include requirements.txt
+include conda-environment.yaml
+include ambs/dreamerv3/configs.yaml
+include ambs/dreamerv3_lag/configs.yaml
+include ambs/dreamerv3_shield/configs.yaml

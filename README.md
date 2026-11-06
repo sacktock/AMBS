@@ -1,109 +1,331 @@
-**Supplementary material** can be found here https://github.com/sacktock/AMBS/blob/main/supplementary-material.pdf. Also, feel free to visit our papers here:
-- https://arxiv.org/abs/2308.00707
-- http://arxiv.org/abs/2402.00816
+# Approximate Model-based Shielding (AMBS)
 
-*AMBS is now compatible with* [Safety Gym](https://github.com/openai/safety-gym)
+This repository provides the latest official implementation of **Approximate Model-based Shielding** including spin-off papers. The general idea is that by leveraging worlds models we can obtain latent risk estimates for safety property violation of reinforcement learning policies. In conjunction with the latent risk estimators a dedicated safe backup policy guides learning through *shielding* -- action replacement -- when the chance of a safety violation in the near future is too high. 
 
-# AMBS
+Papers:
 
-GitHub repository for "Approximate Model-Based Shielding for Safe Reinforcement Learning" and "Leveraging Approximate Model-based Shielding for Probabilistic Safety Guarantees in Continuous Environments".
+- *Seminal paper:* [Approximate Model-Based Shielding for Safe Reinforcement Learning](https://arxiv.org/abs/2308.00707)
+- *Extension and evaluation for continuous state-action spaces:* [Leveraging Approximate Model-based Shielding for Probabilistic Safety Guarantees in Continuous Environments](http://arxiv.org/abs/2402.00816)
+- *Extension to more expression non-Markovian safety properties*: [RECREG: Recovery-based Shielding for Regular Safety Properties in Reinforcement Learning](https://arxiv.org/abs/2610.23445)
 
-# Main Idea
+Supplementary materials (e.g., training details) are provided in the arXiv versions. 
 
-By leveraging world models for look-ahead shielding we obatin a general purpose algorithm for verifying the safety of learned RL policies. Specifically, we use DreamerV3 to simulate possible futures (traces) in the latent space of a learned dynamics model, we check each of these traces and estimate the probability of comitting a safety violation in the near future. If this probability is not sufficiently low then we override the learned policy with a safe policy trained to minimise constraint violations.
+## Software stack
 
-# Agents
+Training runs on CPU or CUDA with [JAX](https://docs.jax.dev/) 0.4.30. [TensorFlow](https://www.tensorflow.org/) 2.17, `tf-keras` 2.17, and [TensorFlow Probability](https://www.tensorflow.org/probability) 0.24 supply action distributions and TensorBoard. Atari and Seaquest use [Gymnasium](https://gymnasium.farama.org/) and ALE. Safety Gym still uses classic Gym and is installed separately.
 
-In our experiments detailed in "Approximate Model-Based Shielding for Safe Reinforcement Learning" all agents are implemented with [JAX](https://github.com/google/jax#pip-installation-gpu-cuda), although the dependencies mostly overlap they may differ slightly depending on whether you are running a DreamerV3 based agent or a dopamine based agent.
+Python 3.12 is required.
 
-# Dependencies
+## Installation
 
-We recommend creating separate conda environments for the DreamerV3 based agents and the dopamine based agents. 
-```
-conda create -n jax --clone base
-conda create -n jax_dopamine --clone base
-```
+### conda
 
-We refer to the [DreamerV3](https://github.com/danijar/dreamerv3) repository for the list of dependencies associated with the DreamerV3 based agents. And we refer to [google/dopamine](https://github.com/google/dopamine) for the list of dependencies associated with the dopamine based agents.
-```
-conda activate jax
-pip install //DreamerV3 dependencies
+- Install conda, for example from [Anaconda](https://anaconda.org/channels/anaconda/packages/conda/overview).
+- Clone the repo:
+
+```bash
+git clone https://github.com/sacktock/AMBS.git
+cd AMBS
 ```
 
-```
-conda activate jax_dopamine
-pip install //dopamine dependencies
-```
-Alternatively use our requirements files, although we stress that the specific [JAX](https://github.com/google/jax#pip-installation-gpu-cuda) installation required is hardware depedent.
+- Create and activate the environment:
 
-```
-conda activate jax
-pip install -r requirements_jax.txt
+```bash
+conda env create --name ambs --file conda-environment.yaml
+conda activate ambs
 ```
 
-```
-conda activate jax_dopamine
-pip install -r requirements_jax_dopamine.txt
-```
-# Running Experiments
-For DreamerV3 based agents, navigate to the relevant subdirectory and run ```train.py```. The following command will run DreamerV3 with AMBS on Seaquest for 40M frames. The ```--env.atari.labels``` flag is used to specify the safety labels ```death```, ```early-surface```, ```out-of-oxygen```,  and the ```xlarge``` option determines the model size (```xlarge``` is the default for atari games).
-```
-cd dreamerV3-shield
-python train.py --logdir ./logdir/seaquest/shield --configs atari xlarge --task atari_seaquest --env.atari.labels death early-surface out-of-oxygen --run.steps 10000000
-```
-*Random seed can be set with the ```--seed``` flag (default 0).*
+- Install the project and its dependencies:
 
-For dopamine based agents, navigate to the dopamine subdirectory an run the desired agent.
+```bash
+pip install -e .
 ```
-cd dopamine
-python -um dopamine.discrete_domains.train --base_dir ./logdir/seaquest/rainbow --gin_files ./dopamine/jax/agents/full_rainbow/configs/full_rainbow_seaquest.gin
-```
-*Random seed can be set by modifying the corresponding .gin file (e.g. JaxFullRainbowAgent.seed=0)*
 
-# Plotting
+`pip install -e .` installs the dependencies declared in `pyproject.toml`. `requirements.txt` lists the same base dependencies and is kept in lockstep with that file. Chex 0.1.87 is part of that set.
 
-For plotting runs we use tensorboard. Navigate to the relevant subdirectory and start tensorboard.
+### uv
+
+From the repository root, `uv sync` installs the base dependency set (CPU JAX):
+
+```bash
+uv sync
 ```
-cd dreamerV3-shield
+
+## Enabling GPU acceleration with JAX (optional)
+
+CPU is enough to smoke-test the launcher. GPU acceleration is optional.
+
+**macOS and Windows:** JAX with CPU is the recommended install. No further action is required after the steps above.
+
+#### pip
+
+**Linux x86_64/aarch64** and **Windows WSL2 x86_64**: jax and jaxlib `0.4.30` are already installed. Reinstall JAX for the CUDA driver. Do not use the `-U` option.
+
+```bash
+pip install "jax[cuda12]==0.4.30"
+```
+
+CUDA 13 does not ship with this stack. JAX 0.4.30 only publishes a CUDA 12 extra.
+
+#### uv
+
+```bash
+uv sync --group cuda12
+```
+
+## Safety Gym
+
+Safety Gym experiments need [MuJoCo](http://mujoco.org/) 2.1 and the Safety Gym fork. These are not project dependencies.
+
+### Download MuJoCo binaries
+
+1. Download the MuJoCo 2.1 binaries for [Linux](https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz) or [OSX](https://mujoco.org/download/mujoco210-macos-x86_64.tar.gz).
+2. Extract the downloaded `mujoco210` directory into `~/.mujoco/mujoco210`.
+
+### Install Safety Gym
+
+```bash
+git clone https://github.com/sacktock/safety-gym
+cd safety-gym
+git checkout 227396a721ea03e4ee6e2223faf34df878270208
+```
+
+That commit pins `mujoco-py` to `06c964d50e9acd2b0130be35c434441a574c905b`. `setup.py` should have this dependency list:
+
+```python
+install_requires=[
+        'gym>=0.15.3',
+        'joblib>=0.14.0',
+        'Cython==0.29.36',
+        'mujoco-py @ git+https://github.com/sacktock/mujoco-py.git@06c964d50e9acd2b0130be35c434441a574c905b',
+        'numpy==1.26.4',
+        'xmltodict>=0.12.0',
+    ],
+```
+
+Then:
+
+```bash
+python -m pip install -e .
+```
+
+Moving Safety Gym onto [safety-gymnasium](https://github.com/Farama-Foundation/Safety-Gymnasium) is a future plan. The current environments stay on Safety Gym so existing results can be reproduced.
+
+### In-cluster extra
+
+```bash
+conda install -c conda-forge glew
+```
+
+**HPC only:**
+
+```bash
+conda install -c conda-forge "mesalib>=25.0.5,<25.1.0"
+```
+
+```bash
+conda install -c conda-forge patchelf
+```
+
+*Optional (on HPC, `module load libglvnd` is an alternative):*
+
+```bash
+conda install -c conda-forge libgl-devel
+```
+
+## How to run
+
+After `pip install -e .`, the `ambs` console script is on `PATH`. With uv, pass the same arguments to `uv run ambs`.
+
+```bash
+ambs train dreamerv3 --configs atari debug --task atari_assault --env.atari.labels overheat death --jax.platform cpu --envs.amount 1 --envs.parallel none --run.steps 200 --logdir logdir/assault/base
+```
+
+```bash
+uv run ambs train dreamerv3 --configs atari debug --task atari_assault --env.atari.labels overheat death --jax.platform cpu --envs.amount 1 --envs.parallel none --run.steps 200 --logdir logdir/assault/base
+```
+
+`train` selects the algorithm. Everything after the algorithm name is parsed by that algorithm's `train.py`, the same flags as before.
+
+| Command | Algorithm |
+| --- | --- |
+| `ambs train dreamerv3` | DreamerV3 |
+| `ambs train dreamerv3-lag` | Lagrangian DreamerV3 |
+| `ambs train dreamerv3-shield` | Shielded DreamerV3 |
+
+`--configs` takes one or more blocks from that algorithm's `configs.yaml`. Later blocks override earlier ones. Remaining flags override individual keys (`--seed 0`, `--run.steps 10000000`, `--env.atari.labels death early-surface out-of-oxygen`).
+
+Suites:
+
+- Atari: `--task atari_assault`, `--task atari_seaquest`, and the other names in the Atari labeller map. Labels come from `--env.atari.labels`.
+- Safety Gym: `--task safetygym_Safexp-PointGoal1-v0` (and the other Safety Gym ids). `--configs safetygym_vision` turns on image observations.
+- Seaquest automata: `--task seaquest` with `--env.seaquest.property_file property_1` or `property_3`.
+
+Shielded runs take `--shielding_type` of `task_prod`, `safe_prod_sum`, `safe_prod_max`, or `safe_prod_cond`. Penalty training still uses `--penalty_coeff`, `--plpg`, and `--copt`.
+
+### AMBS
+
+Reproduce the Atari Seaquest results from [Approximate Model-Based Shielding for Safe Reinforcement Learning](https://arxiv.org/abs/2308.00707). This run shields with `task_prod` and the labels `death`, `early-surface`, and `out-of-oxygen`.
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/seaquest/shield \
+  --configs atari xlarge \
+  --task atari_seaquest \
+  --env.atari.labels death early-surface out-of-oxygen \
+  --shielding_type task_prod \
+  --run.steps 10000000
+```
+
+### AMBS (SafetyGym)
+
+Reproduce PointGoal1 from [Leveraging Approximate Model-based Shielding for Probabilistic Safety Guarantees in Continuous Environments](http://arxiv.org/abs/2402.00816). The three commands are the penalization techniques from that paper: a penalty critic, probabilistic logic policy gradient (PLPG), and counter-example guided policy optimisation (COPT).
+
+Penalty critic:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/safetygym/PointGoal1/shield_penl \
+  --configs safetygym_vision large \
+  --task safetygym_Safexp-PointGoal1-v0 \
+  --penalty_coeff 1.0 \
+  --normalise_ret False \
+  --penl_critic_type vfunction \
+  --run.steps 500000
+```
+
+Probabilistic logic policy gradient:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/safetygym/PointGoal1/shield_plpg \
+  --configs safetygym_vision large \
+  --task safetygym_Safexp-PointGoal1-v0 \
+  --penalty_coeff 0.8 \
+  --plpg True \
+  --normalise_ret False \
+  --penl_critic_type vfunction \
+  --run.steps 500000
+```
+
+Counter-example guided policy optimisation:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/safetygym/PointGoal1/shield_copt \
+  --configs safetygym_vision large \
+  --task safetygym_Safexp-PointGoal1-v0 \
+  --penalty_coeff 1.0 \
+  --copt True \
+  --normalise_ret False \
+  --penl_critic_type vfunction \
+  --run.steps 500000
+```
+
+### RecReg
+
+Reproduce Seaquest property 3 from [RECREG: Recovery-based Shielding for Regular Safety Properties in Reinforcement Learning](https://arxiv.org/abs/2610.23445). `safe_prod_sum`, `safe_prod_max`, and `safe_prod_cond` are the latent risk estimators from that paper.
+
+- `safe_prod_sum` sums the predicted probabilities and clips the total at 1. This is an implicit union bound.
+- `safe_prod_max` takes the maximum predicted probability. This is the correct aggregation when the cost head is deterministic or nearly deterministic.
+- `safe_prod_cond` assumes conditional independence across the lookahead and uses `1 - \prod (1 - \hat{p})`.
+
+`safe_prod_sum`:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/seaquest/safe_prod_sum \
+  --configs seaquest medium \
+  --shielding_type safe_prod_sum \
+  --env.seaquest.property_file property_3 \
+  --run.steps 5000000
+```
+
+`safe_prod_max`:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/seaquest/safe_prod_max \
+  --configs seaquest medium \
+  --shielding_type safe_prod_max \
+  --env.seaquest.property_file property_3 \
+  --run.steps 5000000
+```
+
+`safe_prod_cond`:
+
+```bash
+ambs train dreamerv3-shield \
+  --logdir ./logdir/seaquest/safe_prod_cond \
+  --configs seaquest medium \
+  --shielding_type safe_prod_cond \
+  --env.seaquest.property_file property_3 \
+  --run.steps 5000000
+```
+
+`examples/smoke.py` launches one debug CPU run (a short prefill plus one training chunk) for a chosen algorithm, environment, and, for the shield, shielding type:
+
+```bash
+python examples/smoke.py --algorithm dreamerv3-shield --env assault --shielding-type safe_prod_sum
+```
+
+TensorBoard reads the run directory:
+
+```bash
 tensorboard --logdir ./logdir/seaquest
 ```
 
-# Safety Gym and Penalty Techniques
+## Contributing
 
-Safety Gym is built on MuJoCo. For installation details of MuJoCo we refer you to [here](https://github.com/openai/mujoco-py). Additional requirements for Safety Gym include the following:
-```
-gym>=0.15.3
-joblib>=0.14.0
-mujoco_py>=2.0.2.7
-numpy>=1.17.4
-xmltodict>=0.12.0
-``` 
-*If you have followed the earlier setup and installation instructions, these dependencies may already be satisfied.*
+Contributions must pass the test matrix without breaking existing behavior. The matrix is split three ways. Locally, `pytest` checks that the scientific stack and package import. In GitHub Actions, the `smoke` job runs the full algorithm and environment training matrix. Dependency changes must also keep `requirements.txt` and `pyproject.toml` in lockstep.
 
-To get AMBS to work on [Safety Gym](https://github.com/openai/safety-gym) we need to penalise the (unshielded) task policy. We provide the following three penalty techniques that help AMBS converge to a policy that maximises reward and satisfies the safety constraints of the Safety Gym environments:
+### Tests
 
-- Penalty critic: a simple modification to the policy gradient that penalises unsafe states by providing introducing a weighted cost to the policy gradient. Example:
-```
-python train.py ./logdir/safetygym/PointGoal1/shield_penl --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 1.0 --normalise_ret False --penl_critic_type vfunction --run.steps 500000
-```  
-- *Probabilistic Logic Policy Gradient* (PLPG) (based on this [paper](https://arxiv.org/abs/2303.03226)): renormalisation of the probabilities of the actions of the task policy, based on the level of safety. We recommend using the penalty critic in addition to PLPG. Example:
-```
-python train.py --logdir ./logdir/safetygym/PointGoal1/shield_plpg --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 0.8 --plpg True --normalise_ret False --penl_critic_type vfunction --run.steps 500000
-```
-- *Counter Example Guided Policy Optimisation* (COPT): scaling the gradient of actions to zero when they lead to a safety-violation in the near future. We recommend using the penalty critic in addition to PLPG. Example:
-```
-python train.py --logdir ./logdir/safetygym/PointGoal1/shield_copt --configs safetygym_vision large --task safetygym_Safexp-PointGoal1-v0 --penalty_coeff 1.0 --copt True --normalise_ret False --penl_critic_type vfunction  --run.steps 500000
+With uv:
+
+```bash
+uv sync --group dev
+uv run pytest -v
 ```
 
-Our research paper outlining these techniques can be found here: http://arxiv.org/abs/2402.00816
+With conda or pip, install the project, then pytest, and run from the repository root:
 
-# Acks
+```bash
+pip install -e .
+pip install "pytest>=9"
+pytest -v
+```
 
-We refer to the following repositories from which our code is developed:
+`pytest` is the local test run, and it is what the `tests` job runs. It checks that the scientific stack imports and that the packaged algorithms, Atari and Seaquest modules, and model-checking properties load. It does not install Atari ROMs or Safety Gym, and it does not start training.
 
-- [DreamerV3](https://github.com/danijar/dreamerv3)
-- [Bounded Prescience](https://github.com/HjalmarWijk/bounded-prescience) (safety labels for Atari games)
-- [LAMBDA](https://github.com/yardenas/la-mbda) (lagrangian CPO implementation for DreamerV2)
-- [Dopamine](https://github.com/google/dopamine) (IQN and Rainbow implementations)
+The full smoke matrix is a separate GitHub Actions job, `smoke`, and it is not part of `pytest`. That job runs on Ubuntu only. It calls `examples/smoke.py` for every algorithm and environment: DreamerV3 and Lagrangian DreamerV3 once per environment, and shielded DreamerV3 once per environment for `task_prod`, `safe_prod_sum`, `safe_prod_max`, and `safe_prod_cond`. Each cell is one debug CPU update. The job installs Atari ROMs for Assault and Seaquest, and MuJoCo 2.1 plus Safety Gym for PointGoal1. Those installs stay out of the local `pytest` run because the matrix is large and pulls in ROMs, MuJoCo, and a training launch per cell.
 
+One cell can still be launched locally:
 
+```bash
+# conda or pip
+python examples/smoke.py --algorithm dreamerv3-shield --env assault --shielding-type safe_prod_sum
+
+# uv
+uv run python examples/smoke.py --algorithm dreamerv3-shield --env assault --shielding-type safe_prod_sum
+```
+
+Assault and Seaquest need ROMs first (`uv sync --group smoke`, then `uv run --group smoke AutoROM --accept-license`). PointGoal1 needs the Safety Gym install above.
+
+### Dependency sync
+
+`requirements.txt` must match `[project.dependencies]` in `pyproject.toml`. CI runs `scripts/check_requirements_sync.py` when either file changes. Locally:
+
+```bash
+python scripts/check_requirements_sync.py
+```
+
+## Acknowledgements
+
+- *Original DreamerV3 repository:* [DreamerV3](https://github.com/danijar/dreamerv3)
+- *Safety labels for Atari envs:* [Bounded Prescience](https://github.com/HjalmarWijk/bounded-prescience)
+- *Augmented Lagrangian CMDP implementation for DreamerV2:* [LAMBDA](https://github.com/yardenas/la-mbda)
+
+## License
+
+Our implementation of AMBS is released under the MIT License.
