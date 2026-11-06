@@ -80,7 +80,7 @@ Safety Gym experiments need [MuJoCo](http://mujoco.org/) 2.1 and the Safety Gym 
 ### Download MuJoCo binaries
 
 1. Download the MuJoCo 2.1 binaries for [Linux](https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz) or [OSX](https://mujoco.org/download/mujoco210-macos-x86_64.tar.gz).
-1. Extract the downloaded `mujoco210` directory into `~/.mujoco/mujoco210`.
+2. Extract the downloaded `mujoco210` directory into `~/.mujoco/mujoco210`.
 
 ### Install Safety Gym
 

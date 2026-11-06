@@ -89,9 +89,18 @@ jobs:
             https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
           tar -xzf /tmp/mujoco210.tar.gz -C "$HOME/.mujoco"
           git clone --depth 1 https://github.com/sacktock/safety-gym /tmp/safety-gym
-          uv pip install "Cython==0.29.36" "joblib>=0.14.0" "xmltodict>=0.12.0"
+          # mujoco-py imports these from setup.py during the wheel build, before
+          # install_requires is installed. --no-build-isolation only sees the venv.
+          uv pip install \
+            "Cython==0.29.36" \
+            "cffi>=1.10" \
+            "fasteners~=0.15" \
+            "glfw>=1.4.0" \
+            "imageio>=2.1.2" \
+            "joblib>=0.14.0" \
+            "xmltodict>=0.12.0"
           uv pip install --no-build-isolation \
-            "mujoco-py @ git+https://github.com/sacktock/mujoco-py.git@master"
+            "mujoco-py @ git+https://github.com/sacktock/mujoco-py.git@06c964d50e9acd2b0130be35c434441a574c905b"
           uv pip install --no-deps -e /tmp/safety-gym
       - name: Run smoke
         run: |
