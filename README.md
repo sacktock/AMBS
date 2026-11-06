@@ -1,13 +1,14 @@
-# Approximate Model-Based Shielding (AMBS)
+# Approximate Model-based Shielding (AMBS)
 
-World-model look-ahead for safe reinforcement learning. DreamerV3 rolls out candidate futures in latent space, estimates the chance of a safety violation, and overrides the task policy with a safe policy when that chance is too high.
+This repository provides the latest official implementation of **Approximate Model-based Shielding** including spin-off papers. The general idea is that by leveraging worlds models we can obtain latent risk estimates for safety property violation of reinforcement learning policies. In conjunction with the latent risk estimators a dedicated safe backup policy guides learning through *shielding* -- action replacement -- when the chance of a safety violation in the near future is too high. 
 
 Papers:
 
-- [Approximate Model-Based Shielding for Safe Reinforcement Learning](https://arxiv.org/abs/2308.00707)
-- [Leveraging Approximate Model-based Shielding for Probabilistic Safety Guarantees in Continuous Environments](http://arxiv.org/abs/2402.00816)
+- *Seminal paper:* [Approximate Model-Based Shielding for Safe Reinforcement Learning](https://arxiv.org/abs/2308.00707)
+- *Extension and evaluation for continuous state-action spaces:* [Leveraging Approximate Model-based Shielding for Probabilistic Safety Guarantees in Continuous Environments](http://arxiv.org/abs/2402.00816)
+- *Extension to more expression non-Markovian safety properties*: [RECREG: Recovery-based Shielding for Regular Safety Properties in Reinforcement Learning](https://arxiv.org/abs/2610.23445)
 
-The arXiv versions include the supplementary material.
+Supplementary materials (e.g., training details) are provided in the arXiv versions. 
 
 ## Software stack
 
@@ -237,8 +238,41 @@ TensorBoard reads the run directory:
 tensorboard --logdir ./logdir/seaquest
 ```
 
-## Acks
+## Contributing
 
-- [DreamerV3](https://github.com/danijar/dreamerv3)
-- [Bounded Prescience](https://github.com/HjalmarWijk/bounded-prescience) (safety labels for Atari)
-- [LAMBDA](https://github.com/yardenas/la-mbda) (Lagrangian CPO implementation for DreamerV2)
+### Tests
+
+With uv:
+
+```bash
+uv sync --group dev
+uv run pytest -v
+```
+
+With conda or pip, install the project, then pytest, and run from the repository root:
+
+```bash
+pip install -e .
+pip install "pytest>=9"
+pytest -v
+```
+
+The test suite is small and checks that the scientific stack imports and that the packaged algorithms, Atari and Seaquest environments, and model-checking properties load.
+
+### Dependency sync
+
+`requirements.txt` must match `[project.dependencies]` in `pyproject.toml`. CI runs `scripts/check_requirements_sync.py` when either file changes. Locally:
+
+```bash
+python scripts/check_requirements_sync.py
+```
+
+## Acknowledgements
+
+- *Original DreamerV3 repository:* [DreamerV3](https://github.com/danijar/dreamerv3)
+- *Safety labels for Atari envs:* [Bounded Prescience](https://github.com/HjalmarWijk/bounded-prescience)
+- *Augmented Lagrangian CMDP implementation for DreamerV2:* [LAMBDA](https://github.com/yardenas/la-mbda)
+
+## License
+
+Our implementation of AMBS is released under the MIT License.
