@@ -13,7 +13,7 @@ class CheckTypesFilter(logging.Filter):
 logger.addFilter(CheckTypesFilter())
 
 from ambs.dreamerv3_lag import behaviors
-from ambs.dreamerv3_lag import jaxagent
+from ambs.common import jaxagent
 from ambs.common import jaxutils
 from ambs.common import nets
 from ambs.common import ninjax as nj
