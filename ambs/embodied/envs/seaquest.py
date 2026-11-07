@@ -41,8 +41,8 @@ class Seaquest(embodied.Env):
   LOCK = None
 
   def __init__(
-      self, repeat=4, size=(84, 84), gray=True, noops=0, lives='unused',
-      sticky=True, actions='all', length=108000, resize='opencv', seed=None, property_file="", cost_val=1.0, reset_on_death=False):
+      self, property_file, repeat=4, size=(84, 84), gray=True, noops=0, lives='unused',
+      sticky=True, actions='all', length=108000, resize='opencv', seed=None, cost_val=1.0, reset_on_death=False):
     assert size[0] == size[1]
     assert lives in ('unused', 'discount', 'reset'), lives
     assert actions in ('all', 'needed'), actions

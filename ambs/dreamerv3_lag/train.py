@@ -33,7 +33,7 @@ def make_env(config, **overrides):
     # You can add custom environments by creating and returning the environment
     # instance here. Environments with different interfaces can be converted
     # using `embodied.envs.from_gym.FromGym` and `embodied.envs.from_dm.FromDM`.
-    suite = config.task.split('_', 1)[0]
+    suite, task = config.task.split('_', 1)
     ctor = {
         'atari': 'ambs.embodied.envs.atari:Atari',
         'safetygym': 'ambs.embodied.envs.safetygym:SafetyGym',
@@ -45,11 +45,7 @@ def make_env(config, **overrides):
         ctor = getattr(module, cls)
     kwargs = config.env.get(suite, {})
     kwargs.update(overrides)
-    if suite == 'seaquest':
-        env = ctor(**kwargs)
-    else:
-        task = config.task.split('_', 1)[1]
-        env = ctor(task, **kwargs)
+    env = ctor(task, **kwargs)
     return wrap_env(env, config)
 
 def wrap_env(env, config):
