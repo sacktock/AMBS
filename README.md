@@ -1,6 +1,6 @@
 # Approximate Model-based Shielding (AMBS)
 
-This repository provides the latest official implementation of **Approximate Model-based Shielding** including spin-off papers. The general idea is that by leveraging worlds models we can obtain latent risk estimates for safety property violation of reinforcement learning policies. In conjunction with the latent risk estimators a dedicated safe backup policy guides learning through *shielding* -- action replacement -- when the chance of a safety violation in the near future is too high. 
+This repository provides the latest official implementation of **Approximate Model-based Shielding** including spin-off papers. The general idea is that by leveraging worlds models we can obtain latent risk estimates for safety property violation of reinforcement learning policies. In conjunction with the latent risk estimators a dedicated safe backup policy guides learning through *shielding*: action replacement when the chance of a safety violation in the near future is too high. 
 
 Papers:
 
