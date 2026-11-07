@@ -56,12 +56,12 @@ def build_argv(algorithm: str, env: str, shielding_type: str | None, logdir: Pat
     elif env == "seaquest_property_1":
         argv = [
             "--configs", "seaquest", "debug",
-            "--env.seaquest.property_file", "property_1",
+            "--task", "seaquest_property_1",
         ]
     elif env == "seaquest_property_3":
         argv = [
             "--configs", "seaquest", "debug",
-            "--env.seaquest.property_file", "property_3",
+            "--task", "seaquest_property_3",
         ]
     else:
         raise SystemExit(f"Unknown environment {env}")

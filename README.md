@@ -159,7 +159,7 @@ Suites:
 
 - Atari: `--task atari_assault`, `--task atari_seaquest`, and the other names in the Atari labeller map. Labels come from `--env.atari.labels`.
 - Safety Gym: `--task safetygym_Safexp-PointGoal1-v0` (and the other Safety Gym ids). `--configs safetygym_vision` turns on image observations.
-- Seaquest automata: `--task seaquest` with `--env.seaquest.property_file property_1` or `property_3`.
+- Seaquest automata: `--task seaquest_property_1` or `--task seaquest_property_3`. The suffix is the property module.
 
 Shielded runs take `--shielding_type` of `task_prod`, `safe_prod_sum`, `safe_prod_max`, or `safe_prod_cond`. Penalty training still uses `--penalty_coeff`, `--plpg`, and `--copt`.
 
@@ -236,8 +236,8 @@ Reproduce Seaquest property 3 from [RECREG: Recovery-based Shielding for Regular
 ambs train dreamerv3-shield \
   --logdir ./logdir/seaquest/safe_prod_sum \
   --configs seaquest medium \
+  --task seaquest_property_3 \
   --shielding_type safe_prod_sum \
-  --env.seaquest.property_file property_3 \
   --run.steps 5000000
 ```
 
@@ -247,8 +247,8 @@ ambs train dreamerv3-shield \
 ambs train dreamerv3-shield \
   --logdir ./logdir/seaquest/safe_prod_max \
   --configs seaquest medium \
+  --task seaquest_property_3 \
   --shielding_type safe_prod_max \
-  --env.seaquest.property_file property_3 \
   --run.steps 5000000
 ```
 
@@ -258,8 +258,8 @@ ambs train dreamerv3-shield \
 ambs train dreamerv3-shield \
   --logdir ./logdir/seaquest/safe_prod_cond \
   --configs seaquest medium \
+  --task seaquest_property_3 \
   --shielding_type safe_prod_cond \
-  --env.seaquest.property_file property_3 \
   --run.steps 5000000
 ```
 

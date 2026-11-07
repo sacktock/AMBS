@@ -51,7 +51,7 @@ defaults:
   env:
     atari: {size: [64, 64], repeat: 4, sticky: True, gray: False, actions: all, lives: unused, noops: 30, resize: opencv, labels: ['death'], cost_val: 10.0}
     safetygym: {size: [64, 64], repeat: 2, length: 1000, vision: False, render_type: rgb_image, cost_val: 10.0}
-    seaquest: {size: [64, 64], repeat: 4, sticky: True, gray: False, actions: all, lives: unused, noops: 30, resize: opencv, property_file: "property_1", cost_val: 10.0, reset_on_death: False}
+    seaquest: {size: [64, 64], repeat: 4, sticky: True, gray: False, actions: all, lives: unused, noops: 30, resize: opencv, cost_val: 10.0, reset_on_death: False}
 
   # Agent
   task_behavior: Greedy
@@ -154,7 +154,7 @@ atari:
 
 seaquest:
 
-  task: seaquest
+  task: seaquest_property_1
   envs.amount: 8
   wrapper: {length: 27000}
   run:
